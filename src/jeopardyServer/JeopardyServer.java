@@ -53,6 +53,12 @@ public class JeopardyServer {
 		//ServerSocket initialization, binding to port, binding to socket, binding to data stream, output stream, input stream
 		for(int i = 0; i < numPlayers; i++) {
 			System.out.println("Waiting on player: " + (i + 1));
+			
+			//Notify the players who they are waiting on
+			for(int x = 0; x < i; x++) {
+				playerDataOut[x].writeUTF("Waiting on player: " + (i + 1));
+			}
+			
 			playerSocket[i] = playerServerSocket[0].accept();
 			System.out.println("Player " + (i + 1) + " accepted");
 		
@@ -71,5 +77,12 @@ public class JeopardyServer {
 			//Tell the player which one they are
 			playerDataOut[i].writeUTF("Player" + (i + 1));
 		}
+		
+		//Tell the players game has started
+		for(int i = 0; i < numPlayers; i++) {
+			playerDataOut[i].writeUTF("Game Started");
+		}
+		
+		
 	}
 }
