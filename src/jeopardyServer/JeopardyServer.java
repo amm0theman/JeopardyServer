@@ -49,7 +49,7 @@ public class JeopardyServer {
 		connectionStatuses = new ConnectionStatusForm(numPlayers); 
 		
 		//ServerSocket initialization and binding
-		playerServerSocket[0] = new ServerSocket(5555);
+		playerServerSocket[0] = new ServerSocket(5557);
 		//ServerSocket initialization, binding to port, binding to socket, binding to data stream, output stream, input stream
 		for(int i = 0; i < numPlayers; i++) {
 			System.out.println("Waiting on player: " + (i + 1));
