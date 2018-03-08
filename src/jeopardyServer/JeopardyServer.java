@@ -10,7 +10,9 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-import jeopardyForms.ConnectionStatusForm;
+import jeopardyForms.AnswerForm;
+import jeopardyForms.GuessForm;
+import jeopardyForms.QuestionForm;
 
 public class JeopardyServer {
 	
@@ -28,12 +30,27 @@ public class JeopardyServer {
 	ObjectInputStream[] playerObjectIn;
 	
 	//Forms
-	ConnectionStatusForm connectionStatuses;
+	
+	//Questions
+	QuestionForm[] questions;
+	String[] answerBank;
 	
 	//Constructor, stage 1 initialization, connect to clients etc
 	public JeopardyServer(Integer numPlayers) throws IOException {
 		//number of players
 		numberOfPlayers = numPlayers;
+		
+		//Defining questions
+		questions = new QuestionForm[2];
+		answerBank = new String[2];
+		questions[0].dollarAmt = 200;
+		questions[0].question = "What is Ammon's last name?";
+		
+		questions[1].dollarAmt = 300;
+		questions[1].question = "What is Nathan's favorite Overwatch team that is garbage?";
+		
+		answerBank[0] = "Riley";
+		answerBank[1] = "Dallas Fuel";
 		
 		//Connection member initialization
 		playerServerSocket = new ServerSocket[numPlayers];
@@ -46,7 +63,6 @@ public class JeopardyServer {
 		playerObjectIn = new ObjectInputStream[numPlayers];
 		
 		//Forms initialization
-		connectionStatuses = new ConnectionStatusForm(numPlayers); 
 		
 		//ServerSocket initialization and binding
 		playerServerSocket[0] = new ServerSocket(5557);
@@ -68,33 +84,70 @@ public class JeopardyServer {
 			
 			//Object streams
 			playerObjectOut[i] = new ObjectOutputStream(playerSocket[i].getOutputStream());
-			playerObjectIn[i] = new ObjectInputStream(playerSocket[i].getInputStream());
+			playerObjectIn[0] = new ObjectInputStream(playerSocket[i].getInputStream());
 			
 			//In/out data streams binding
 			playerDataOut[i] = new DataOutputStream(playerOutput[i]);
 			playerDataIn[i] = new DataInputStream(playerInput[i]);
 			
 			//Tell the player which one they are
-			playerDataOut[i].writeUTF("Player" + (i + 1));
+			playerDataOut[i].writeInt((i + 1));
 		}
 		
 		//Tell the players game has started
 		for(int i = 0; i < numPlayers; i++) {
 			playerDataOut[i].writeUTF("Game Started");
+			playerDataOut[i].writeInt(numPlayers);
 		}
 		
+		
 		//STAGE TWO
+		int questionCounter = 0;
+		boolean gameOver = false;
+		boolean answer = false;
+		
 		while(!gameOver) {
 			//if no questions send gameOverForm
-			//print question/answer
-			//pass clients question and dollar amt
+			if (questionCounter == questions.length)
+			{
+				for(int i = 0; i < numPlayers; i++) {
+					playerDataOut[i].writeUTF("Game Over");
+				}
+				gameOver = true;
+			}
+			
+			//pass clients question/answer
+			for(int i = 0; i < numPlayers; i++) {
+				playerObjectOut[i].writeObject(questions[questionCounter]);
+				questionCounter++;
+			}
+			
 			while(!answer) {
 				//receive answers from everyone + uid
+				GuessForm tempForm = null;
+				try {
+				for(int i = 0; i < numPlayers; i++) {
+					tempForm = (GuessForm) playerObjectIn[0].readObject();
+				}
 				//if wrong do nothing
 				//if right pass to all clients correct guess + uid
-				//if right answer = true
+				if(tempForm.theGuess.equals(answerBank[questionCounter]))
+				{
+					for(int i = 0; i < numPlayers; i++) {
+						AnswerForm tempAnswer = new AnswerForm();
+						tempAnswer.playerID = tempForm.playerID;
+						tempAnswer.dollarAmount = questions[questionCounter].dollarAmt;
+						tempAnswer.theAnswer = tempForm.theGuess;
+					}
+					answer = true;
+				}
 			}
-			//pass uid + dollar amt
+				
+			 catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}	
 		}
 	}
+}
 }
