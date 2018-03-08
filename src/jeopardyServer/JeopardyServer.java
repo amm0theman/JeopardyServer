@@ -83,6 +83,18 @@ public class JeopardyServer {
 			playerDataOut[i].writeUTF("Game Started");
 		}
 		
-		
+		//STAGE TWO
+		while(!gameOver) {
+			//if no questions send gameOverForm
+			//print question/answer
+			//pass clients question and dollar amt
+			while(!answer) {
+				//receive answers from everyone + uid
+				//if wrong do nothing
+				//if right pass to all clients correct guess + uid
+				//if right answer = true
+			}
+			//pass uid + dollar amt
+		}
 	}
 }
