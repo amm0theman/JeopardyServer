@@ -18,6 +18,10 @@ public class GuessForm implements JeopardyForm, Serializable {
 	
 	@Override
 	public String toString() {
-		return playerID + ": " + theGuess + " INCORRECCT";
+		return "Player" + playerID + ": " + theGuess + " INCORRECT";
+	}
+	
+	public String getGuess() {
+		return theGuess;
 	}
 }

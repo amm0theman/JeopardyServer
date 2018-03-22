@@ -9,18 +9,14 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-
-import jeopardyForms.AnswerForm;
-import jeopardyForms.GuessForm;
 import jeopardyForms.QuestionForm;
 
 public class JeopardyServer {
 	
 	//number of players
-	Integer numberOfPlayers;
-	
+	Integer numberOfPlayers;	
 	//Connection members
-	ServerSocket[] playerServerSocket;
+	ServerSocket playerServerSocket;
 	Socket[] playerSocket;
 	InputStream[] playerInput;
 	OutputStream[] playerOutput;
@@ -28,6 +24,7 @@ public class JeopardyServer {
 	DataInputStream[] playerDataIn;
 	ObjectOutputStream[] playerObjectOut;
 	ObjectInputStream[] playerObjectIn;
+	static volatile int questionCounter = 0;
 	
 	//Forms
 	
@@ -37,12 +34,23 @@ public class JeopardyServer {
 	
 	//Constructor, stage 1 initialization, connect to clients etc
 	public JeopardyServer(Integer numPlayers) throws IOException {
+		
+		//ServerSocket initialization and binding
+		playerServerSocket = new ServerSocket();		
+		playerServerSocket = new ServerSocket(5557);
+		
+		while(true) {
+		synchronized(this) {
+			questionCounter = 0;
+		}
 		//number of players
 		numberOfPlayers = numPlayers;
 		
 		//Defining questions
 		questions = new QuestionForm[2];
 		answerBank = new String[2];
+		questions[0] = new QuestionForm();
+		questions[1] = new QuestionForm();
 		questions[0].dollarAmt = 200;
 		questions[0].question = "What is Ammon's last name?";
 		
@@ -53,7 +61,6 @@ public class JeopardyServer {
 		answerBank[1] = "Dallas Fuel";
 		
 		//Connection member initialization
-		playerServerSocket = new ServerSocket[numPlayers];
 		playerSocket = new Socket[numPlayers];
 		playerInput = new InputStream[numPlayers];
 		playerOutput = new OutputStream[numPlayers];
@@ -62,10 +69,8 @@ public class JeopardyServer {
 		playerObjectOut = new ObjectOutputStream[numPlayers];
 		playerObjectIn = new ObjectInputStream[numPlayers];
 		
-		//Forms initialization
 		
-		//ServerSocket initialization and binding
-		playerServerSocket[0] = new ServerSocket(5557);
+		
 		//ServerSocket initialization, binding to port, binding to socket, binding to data stream, output stream, input stream
 		for(int i = 0; i < numPlayers; i++) {
 			System.out.println("Waiting on player: " + (i + 1));
@@ -75,7 +80,8 @@ public class JeopardyServer {
 				playerDataOut[x].writeUTF("Waiting on player: " + (i + 1));
 			}
 			
-			playerSocket[i] = playerServerSocket[0].accept();
+			System.out.println("waiting to accept network connection");
+			playerSocket[i] = playerServerSocket.accept();
 			System.out.println("Player " + (i + 1) + " accepted");
 		
 			//In/out streams binding
@@ -84,8 +90,7 @@ public class JeopardyServer {
 			
 			//Object streams
 			playerObjectOut[i] = new ObjectOutputStream(playerSocket[i].getOutputStream());
-			playerObjectIn[0] = new ObjectInputStream(playerSocket[i].getInputStream());
-			
+			playerObjectIn[i] = new ObjectInputStream(playerSocket[i].getInputStream());
 			//In/out data streams binding
 			playerDataOut[i] = new DataOutputStream(playerOutput[i]);
 			playerDataIn[i] = new DataInputStream(playerInput[i]);
@@ -94,60 +99,64 @@ public class JeopardyServer {
 			playerDataOut[i].writeInt((i + 1));
 		}
 		
+		System.out.println("questionCounter: " + questionCounter);
+		
 		//Tell the players game has started
 		for(int i = 0; i < numPlayers; i++) {
+			System.out.println("Game Started");
 			playerDataOut[i].writeUTF("Game Started");
 			playerDataOut[i].writeInt(numPlayers);
+			playerDataOut[i].flush();
 		}
 		
 		
 		//STAGE TWO
-		int questionCounter = 0;
-		boolean gameOver = false;
-		boolean answer = false;
 		
-		while(!gameOver) {
-			//if no questions send gameOverForm
-			if (questionCounter == questions.length)
-			{
-				for(int i = 0; i < numPlayers; i++) {
-					playerDataOut[i].writeUTF("Game Over");
-				}
-				gameOver = true;
-			}
-			
-			//pass clients question/answer
-			for(int i = 0; i < numPlayers; i++) {
-				playerObjectOut[i].writeObject(questions[questionCounter]);
-				questionCounter++;
-			}
-			
-			while(!answer) {
-				//receive answers from everyone + uid
-				GuessForm tempForm = null;
-				try {
-				for(int i = 0; i < numPlayers; i++) {
-					tempForm = (GuessForm) playerObjectIn[0].readObject();
-				}
-				//if wrong do nothing
-				//if right pass to all clients correct guess + uid
-				if(tempForm.theGuess.equals(answerBank[questionCounter]))
-				{
-					for(int i = 0; i < numPlayers; i++) {
-						AnswerForm tempAnswer = new AnswerForm();
-						tempAnswer.playerID = tempForm.playerID;
-						tempAnswer.dollarAmount = questions[questionCounter].dollarAmt;
-						tempAnswer.theAnswer = tempForm.theGuess;
-					}
-					answer = true;
-				}
-			}
-				
-			 catch (ClassNotFoundException e) {
+		ClientListenerThread[] clients = new ClientListenerThread[numPlayers];
+		//create threads that have access to the playerObjectOut and playerObjectIn objects
+		for(int i = 0; i < numPlayers; i++) {
+			clients[i] = new ClientListenerThread(playerObjectIn, numPlayers, i, playerObjectOut, questions, answerBank);
+		}
+		
+		for(int i = 0; i < numPlayers; i++) {
+			playerObjectOut[i].writeObject(questions[0]);
+		}
+		
+		Thread[] clientThread = new Thread[numPlayers];
+		
+		for(int i = 0; i < numPlayers; i++) {
+			clientThread[i] = new Thread(clients[i]);
+		}
+		
+		for(int i = 0; i < numPlayers; i++) {
+			clientThread[i].start();
+		}
+		
+		//Wait for game to finish
+		for(int i = 0; i < numPlayers; i++) {
+			try {
+				System.out.println("ServerMAIN: Waiting on join for " + i + " thread");
+				clientThread[i].join();
+				System.out.println("ServerMAIN: Successful join on " + i + " thread");
+			} catch (InterruptedException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
-			}	
+			}
+		}
+				
+		System.out.println("ServerMAIN: Game finished");
+		
+		//Close resources
+		for(int i = 0; i < numPlayers; i++) {
+			playerDataOut[i].close();
+			playerDataIn[i].close();
+			playerObjectOut[i].close();
+			playerObjectIn[i].close();
+			playerInput[i].close();
+			playerOutput[i].close();
+			playerSocket[i].close();
+		}
+		System.out.println("ServerMAIN: Ready for next game");
 		}
 	}
-}
 }
